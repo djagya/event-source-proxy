@@ -1,54 +1,47 @@
-import asyncio
+import socket
+import threading
 
 
 class ClientsServer:
     # Currently connected users: {user_id -> writer, ...}
     clients = {}
 
-    def __init__(self, host='127.0.0.1', port=9099):
-        self.host = host
-        self.port = port
+    def listen(self, host='127.0.0.1', port=9099):
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.bind((host, port))
+        s.listen()
+        print(f"Clients: accepting connections on {host}:{port}")
 
-    async def listen(self):
-        server = await asyncio.start_server(self.connected_cb, self.host, self.port)
-        addr = server.sockets[0].getsockname()
-        print(f"Clients: created server, {addr}")
+        # Accept client connections
+        while True:
+            conn, _ = s.accept()
+            t = threading.Thread(target=self.register_client, args=(conn,))
+            t.start()
 
-        await server.serve_forever()
+    def stop(self):
+        for conn in self.clients.values():
+            conn.close()
 
-    async def connected_cb(self, reader, writer):
-        #print(f"Clients: connected user_id={user_id}")
-        # Once connected, wait for the id received as a first client message
-        user_id = (await reader.readline()).decode().rstrip()
-        self.clients[user_id] = writer
+    def register_client(self, conn):
+        """Receive a user id from a connected client and register it as a connected client."""
+        data = conn.recv(4096)
+        user_id = data.decode().rstrip()
+        self.clients[user_id] = conn
 
-    async def notify(self, event, ids):
+    def notify(self, ids, message):
         """Send event to the user.
-        Client is disconnected if on read the connection fails.
         """
+
         # All ids for True or only presented in connected clients.
         ids = self.clients.keys() if ids is True else set(ids).intersection(self.clients)
         if not ids:
             return
 
-        #tasks = []
         for id in ids:
-            writer = self.clients[id]
+            conn = self.clients[id]
             try:
-                await writer.drain()
-                writer.write(event.encode())
-            except (ConnectionError):
-                print(f'User#{id} has disconnected')
+                conn.sendall((message + '\n').encode())
+            except Exception as e:
+                print(
+                    f'Error on sending data: {e!r}, consider it disconnected')
                 del self.clients[id]
-
-            #tasks.append(asyncio.create_task(writer.drain()))
-
-        #await asyncio.gather(*tasks)
-
-    async def send_batch(self, id, messages):
-        writer = self.clients[id]
-        for message in messages:
-            writer.write(message.encode())
-        #print(f'Awaiting drain to {id}: {messages!r}')
-        #await writer.drain()
-        #print(f'Sent to {id}: {messages!r}')

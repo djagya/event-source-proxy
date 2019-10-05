@@ -1,4 +1,4 @@
-import asyncio
+import socket
 from src.profiler import Profiler
 from src.event_handler import parse
 import time
@@ -8,50 +8,52 @@ profiler = Profiler()
 
 
 class SourceServer:
+    socket = None
     # Ring buffer with the MAX_BUFFER_SIZE which restricts the amount of memory used.
     # Max size should be determined based on the distance between max arrived event and min unarrived = events needed to be buffered.
     buffer = {}
     # Last processed event seq id.
     last_seq = 0
-    # Max seq id in the buffer.
-    max_seq = 0
 
-    def __init__(self, sequence_cb, host='127.0.0.1', port=9090):
-        self.sequence_cb = sequence_cb
-        self.host = host
-        self.port = port
+    def __init__(self, queue):
+        self.queue = queue
 
-    async def listen(self):
-        server = await asyncio.start_server(self.connected_cb, self.host, self.port)
-        addr = server.sockets[0].getsockname()
-        print(f"Event source: created server, {addr}")
+    def listen(self, host='127.0.0.1', port=9090):
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.bind((host, port))
+        self.socket.listen()
+        print(f"Event source: created server, {host}:{port}")
+        conn, addr = self.socket.accept()
+        print(f"Event source: source connected, {addr}")
 
-        await server.serve_forever()
-
-    async def connected_cb(self, reader, writer):
-        print(f"Event source: connected")
+        buffer = ''
         while True:
-            message = await reader.readline()
-            if not message:
+            data = conn.recv(4096).decode()
+            if not data:
+                self.stop()
                 break
-            seq, idx = self.receive(message.decode().rstrip())
+
+            buffer += data
+            *messages, buffer = buffer.split('\n')
+
+            self.buffer_messages(messages)
+
+    def stop(self):
+        if self.socket:
+            self.socket.close()
+
+    def buffer_messages(self, messages):
+        for message in messages:
+            seq, idx = self.receive(message)
 
             if seq > 0 and seq % 100000 == 0:
-                profiler.display(seq)
-
-            self.max_seq = max(self.max_seq, seq)
+                profiler.display(seq, self.queue)
 
             # When a subsequent event is received, trigger the sequence processing
             # until next missing event seq is met.
-            
-            # This condition is for ring buffer.
-            # if seq == self.last_seq + 1:
-            if len(self.buffer) == self.max_seq - self.last_seq:
-                sequence = self.collect_sequence(idx)
-                self.last_seq = self.max_seq
-                # asyncio.create_task(self.sequence_cb(sequence))
-                await self.sequence_cb(sequence)
-                self.buffer.clear()
+            if seq == self.last_seq + 1:
+                for msg in self.collect_sequence(idx):
+                    self.queue.put_nowait(msg)
 
     def receive(self, message):
         seq, *_ = parse(message)
@@ -72,15 +74,13 @@ class SourceServer:
         idx = from_idx
         messages = []
         while idx in self.buffer:
-            #seq, message = self.buffer.pop(idx)
-            seq, message = self.buffer[idx]
+            seq, message = self.buffer.pop(idx)
             idx = buffer_idx(seq + 1)
-            #self.last_seq = seq
+            self.last_seq = seq
             messages.append(message)
 
         return messages
 
 
-# This if for ring buffer.
-# def buffer_idx(seq): return seq % MAX_BUFFER_SIZE
-def buffer_idx(seq): return seq
+# Ring buffer index.
+def buffer_idx(seq): return seq % MAX_BUFFER_SIZE

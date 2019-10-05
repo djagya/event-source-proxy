@@ -3,8 +3,8 @@ import sys
 import threading
 import queue
 from src.event_handler import EventHandler
-from src.source_server_1 import SourceServer
-from src.clients_server_1 import ClientsServer
+from src.source_server import SourceServer
+from src.clients_server import ClientsServer
 
 def queue_worker():
     while True:
