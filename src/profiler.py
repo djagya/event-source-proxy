@@ -11,23 +11,8 @@ class Profiler:
     def display(self, seq, queue):
         """Display profile information."""
 
-        #def avg(x): return sum(x) / len(x) if len(x) > 0 else 0
-
         print('\n#' + '{:,}'.format(seq))
         print(f'queue_size: {queue.qsize()}')
-        print(f'per_{seq - self.last_seq}\t{round(time.perf_counter() - self.last_profile_time, 4)}s\n')
-              #f'avg_batch_size     \t{round(avg(self.batch_sizes))}\n'
-              #f'avg_time_between   \t{round(avg(self.batch_times), 4)}s\n'
-              #f'last_time_between   \t{round(self.batch_times[-1], 4)}s\n'
-              #f'avg_processing_time\t{round(avg(self.processing_times), 4)}s\n'
-              #f'last_processing_time\t{round(self.processing_times[-1], 4)}')
+        print(f'per_{seq - self.last_seq}\t{round(time.perf_counter() - self.last_profile_time, 4)}s')
         self.last_profile_time = time.perf_counter()
         self.last_seq = seq
-
-    def store(self, start_time, processed_n):
-        """Store profile information."""
-
-        #self.batch_times.append(time.perf_counter() - self.last_triggered_time)
-        #self.last_triggered_time = time.perf_counter()
-        #self.batch_sizes.append(processed_n)
-        #self.processing_times.append(time.perf_counter() - start_time)

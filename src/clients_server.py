@@ -19,8 +19,13 @@ class ClientsServer:
             t.start()
 
     def stop(self):
+        i = 0
         for conn in self.clients.values():
+            i += 1
             conn.close()
+        self.clients.clear()
+        print(f'Clients: stopped, closed {i} connections')
+        
 
     def register_client(self, conn):
         """Receive a user id from a connected client and register it as a connected client."""

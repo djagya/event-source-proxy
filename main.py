@@ -13,22 +13,29 @@ def queue_worker():
         clients_server.notify(notify_ids, message)
         q.task_done()
 
-q = queue.Queue(maxsize=10000)
+# This variable depends on the maximum arriving number of out-of-order events,
+# i.e. the difference between max arrived and min unarrived event seq.
+if len(sys.argv) >= 2 and sys.argv[1].startswith('--buffer='):
+    buffer_size = int(sys.argv[1].split('=')[1] or 10000)
+else:
+    buffer_size = 10000
+
+q = queue.Queue(maxsize=buffer_size)
 handler = EventHandler()
-source_server = SourceServer(q)
+source_server = SourceServer(q, buffer_size)
 clients_server = ClientsServer()
 
 try:
-    clients_thread = threading.Thread(target=clients_server.listen)
+    clients_thread = threading.Thread(target=clients_server.listen, daemon=True)
     clients_thread.start()
 
-    worker_thread = threading.Thread(target=queue_worker)
+    worker_thread = threading.Thread(target=queue_worker, daemon=True)
     worker_thread.start()
 
     source_server.listen()
-except (KeyboardInterrupt, SystemExit):
-    print("Graceful shutdown")
-    # todo: empty the queue
+    sys.exit()
+except Exception as err:
+    print(f'Graceful shutdown, reason: {err!r}')
     source_server.stop()
     clients_server.stop()
     sys.exit()

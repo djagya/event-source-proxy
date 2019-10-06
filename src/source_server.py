@@ -9,20 +9,25 @@ profiler = Profiler()
 
 class SourceServer:
     socket = None
-    # Ring buffer with the MAX_BUFFER_SIZE which restricts the amount of memory used.
+    # Ring buffer of the size "buffers_size" which restricts the max amount of used memory.
     # Max size should be determined based on the distance between max arrived event and min unarrived = events needed to be buffered.
     buffer = {}
     # Last processed event seq id.
     last_seq = 0
 
-    def __init__(self, queue):
+    def __init__(self, queue, buffer_size):
         self.queue = queue
+        self.buffer_size = buffer_size
+
+    def buffer_idx(self, seq):
+        """Ring buffer index"""
+        return seq % self.buffer_size
 
     def listen(self, host='127.0.0.1', port=9090):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.socket.bind((host, port))
         self.socket.listen()
-        print(f"Event source: created server, {host}:{port}")
+        print(f"Event source: created server on {host}:{port} with the buffer size {self.buffer_size}")
         conn, addr = self.socket.accept()
         print(f"Event source: source connected, {addr}")
 
@@ -41,6 +46,8 @@ class SourceServer:
     def stop(self):
         if self.socket:
             self.socket.close()
+            self.socket = None
+            print('Event source: stopped')
 
     def buffer_messages(self, messages):
         for message in messages:
@@ -58,11 +65,11 @@ class SourceServer:
     def receive(self, message):
         seq, *_ = parse(message)
         seq = int(seq)
-        idx = buffer_idx(seq)
+        idx = self.buffer_idx(seq)
 
         # Check if an overwrite occurs in the buffer, meaning it's overflown and events are being lost.
         if idx in self.buffer:
-            print(f'Overwrite! {idx} buffer index for seq#{seq} is not empty')
+            raise BufferError(f'Overwrite! {idx} buffer index for seq#{seq} is not empty')
 
         # If there's a possibility of events being lost or skipped # in the sequence,
         # a timer would be required to flush the buffer and avoid waiting for a missing event.
@@ -75,12 +82,8 @@ class SourceServer:
         messages = []
         while idx in self.buffer:
             seq, message = self.buffer.pop(idx)
-            idx = buffer_idx(seq + 1)
+            idx = self.buffer_idx(seq + 1)
             self.last_seq = seq
             messages.append(message)
 
         return messages
-
-
-# Ring buffer index.
-def buffer_idx(seq): return seq % MAX_BUFFER_SIZE
