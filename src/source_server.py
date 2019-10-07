@@ -1,44 +1,51 @@
 import socket
+import threading
 from src.profiler import Profiler
 from src.event_handler import parse
 import time
+import os
 
 MAX_BUFFER_SIZE = 1000
 profiler = Profiler()
 
 
-class SourceServer:
+class SourceServer():
     socket = None
+    is_listening = False
     # Ring buffer of the size "buffers_size" which restricts the max amount of used memory.
     # Max size should be determined based on the distance between max arrived event and min unarrived = events needed to be buffered.
     buffer = {}
     # Last processed event seq id.
     last_seq = 0
 
-    def __init__(self, queue, buffer_size):
-        self.queue = queue
+    def __init__(self, queue, buffer_size, host='127.0.0.1', port=9090):
+        self.host = host
+        self.port = port
         self.buffer_size = buffer_size
+        self.queue = queue
 
-    def buffer_idx(self, seq):
-        """Ring buffer index getter"""
-        return seq % self.buffer_size
-
-    def listen(self, host='127.0.0.1', port=9090):
+    def start(self):
         """Start a server listening for the event source connection on the given host:port.
         Data chunks arrives and consist of out-of-order event messages. 
         Data is then split by \\n to extract a list of messages 
         which are then buffered to ensure the correct processing order.
         """
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.bind((host, port))
+        try:
+            self.socket.bind((self.host, self.port))
+        except Exception as err:
+            print(f'Failed to start event source server on {self.host}:{self.port}: {err!r}')
+            os._exit(1)
+        
         self.socket.listen()
         print(
-            f"Event source: created server on {host}:{port} with the buffer size {self.buffer_size}")
+            f"Event source: created server on {self.host}:{self.port} with the buffer size {self.buffer_size}")
         conn, addr = self.socket.accept()
         print(f"Event source: source connected, {addr}")
 
+        self.is_listening = True
         buffer = ''
-        while True:
+        while self.is_listening:
             data = conn.recv(4096).decode()
             if not data:
                 self.stop()
@@ -50,12 +57,17 @@ class SourceServer:
 
             self.buffer_messages(messages)
 
+    def buffer_idx(self, seq):
+        """Ring buffer index getter"""
+        return seq % self.buffer_size
+
     def stop(self):
         """Stop the server by closing the active connection."""
         if self.socket:
             self.socket.close()
             self.socket = None
             print('Event source: stopped')
+        self.is_listening = False
 
     def buffer_messages(self, messages):
         """Buffer arrived out-of-order messages in a ring-buffer

@@ -1,40 +1,57 @@
 import socket
 import threading
+import os
 
 
-class ClientsServer:
+class ClientsServer(threading.Thread):
+    socket = None
     # Currently connected users: {user_id -> writer, ...}
     clients = {}
+    is_listening = False
 
-    def listen(self, host='127.0.0.1', port=9099):
+    def __init__(self, host='127.0.0.1', port=9099):
+        threading.Thread.__init__(self)
+        self.host = host
+        self.port = port
+
+    def run(self):
         """Start a server listening for client connections on the given host:port.
         For every new client connection a short-living thread is created 
         to receive a user id and registed the client connection under that id. 
         """
-        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.bind((host, port))
-        s.listen()
-        print(f"Clients: accepting connections on {host}:{port}")
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.socket.bind((self.host, self.port))
+        except Exception as err:
+            print(f'Failed to start clients server on {self.host}:{self.port}: {err!r}')
+            os._exit(1)
+
+        self.socket.listen()
+        print(f"Clients: accepting connections on {self.host}:{self.port}")
 
         # Accept client connections
-        while True:
-            conn, _ = s.accept()
+        self.is_listening = True
+        while self.is_listening:
+            conn, _ = self.socket.accept()
             t = threading.Thread(target=self.register_client, args=(conn,))
             t.start()
 
     def stop(self):
         """Stop the server by closing all active connections."""
+        self.is_listening = False
         i = 0
         for conn in self.clients.values():
             i += 1
             conn.close()
         self.clients.clear()
+        if self.socket:
+            self.socket.close()
         print(f'Clients: stopped, closed {i} connections')
 
     def register_client(self, conn):
         """Receive a user id from a connection and register it as a connected user."""
         data = conn.recv(4096)
-        user_id = data.decode().rstrip()
+        user_id = int(data.decode().rstrip())
         self.clients[user_id] = conn
 
     def notify(self, ids, message):
@@ -44,6 +61,9 @@ class ClientsServer:
         ids - a list of user ids.
         message - an exact event message.
         """
+
+        if not self.is_listening:
+            return
 
         # All ids for True or only presented in connected clients.
         ids = self.clients.keys() if ids is True else set(ids).intersection(self.clients)
