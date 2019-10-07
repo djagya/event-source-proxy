@@ -20,7 +20,7 @@ $ snakeviz out.profile
 $ python main.py [--buffer=100000]
 ```
 
-OR using Docker (it is slower)
+OR using Docker (it is slower however)
 
 ```bash
 $ docker build -t followermaze .

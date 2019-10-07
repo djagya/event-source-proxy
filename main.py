@@ -35,6 +35,7 @@ try:
     worker_thread.start()
 
     source_server.start()
+    sys.exit()
 except BaseException as err:
     print(f'Graceful shutdown, reason: {err!r}')
     source_server.stop()
