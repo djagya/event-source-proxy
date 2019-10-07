@@ -18,7 +18,7 @@ class SourceServer():
     # Last processed event seq id.
     last_seq = 0
 
-    def __init__(self, queue, buffer_size, host='127.0.0.1', port=9090):
+    def __init__(self, queue, buffer_size, host='', port=9090):
         self.host = host
         self.port = port
         self.buffer_size = buffer_size

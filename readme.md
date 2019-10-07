@@ -20,6 +20,13 @@ $ snakeviz out.profile
 $ python main.py [--buffer=100000]
 ```
 
+OR using Docker (it is slower)
+
+```bash
+$ docker build -t followermaze .
+$ docker run -it --rm -p 9090:9090 -p 9099:9099 followermaze
+```
+
 Where **`--buffer`** specifies the max queue and buffer size, and should be determined based on the max allowed out-of-order events: the diff between the max arrived and min unarrived event sequence numbers.
 
 ## `ClientsServer`

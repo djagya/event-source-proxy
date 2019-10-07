@@ -9,7 +9,7 @@ class ClientsServer(threading.Thread):
     clients = {}
     is_listening = False
 
-    def __init__(self, host='127.0.0.1', port=9099):
+    def __init__(self, host='', port=9099):
         threading.Thread.__init__(self)
         self.host = host
         self.port = port
