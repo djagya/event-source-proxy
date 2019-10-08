@@ -18,7 +18,7 @@ class SourceServer(threading.Thread):
     # Last processed event seq id.
     last_seq = 0
 
-    def __init__(self, queue, buffer_size, host='', port=9090):
+    def __init__(self, queue, buffer_size=10000, host='', port=9090):
         threading.Thread.__init__(self)
         self.host = host
         self.port = port
@@ -84,13 +84,17 @@ class SourceServer(threading.Thread):
 
             # When a subsequent event is received, trigger the sequence processing
             # until next missing event seq is met.
-            if seq == self.last_seq + 1:
+            if self.should_process(seq):
                 for msg in self.collect_sequence(idx):
                     self.queue.put_nowait(msg)
 
+    def should_process(self, seq):
+        """Process when a subsequent event after the last one is received."""
+        return seq == self.last_seq + 1
+
     def receive(self, message):
         """Receive the message by parsing and putting it on a corresponding ring-buffer index.
-        Overflows are prevented in current implementation, considering the event loss is not allowed.Ò
+        Overflows are prevented in current implementation, considering the event loss is not allowed.
         """
         seq, *_ = parse(message)
         seq = int(seq)

@@ -45,3 +45,10 @@ Considering there are no lost events and skipped sequence numbers, it waits for 
 ## `EventHandler`
 
 This class implements the business logic of processing different event types specified in `instructions.md`.
+
+
+# Running tests
+
+```bash
+$ python -m unittest discover
+```
