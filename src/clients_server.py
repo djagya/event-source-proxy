@@ -20,6 +20,7 @@ class ClientsServer(threading.Thread):
         to receive a user id and registed the client connection under that id. 
         """
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             self.socket.bind((self.host, self.port))
         except Exception as err:
@@ -32,20 +33,25 @@ class ClientsServer(threading.Thread):
         # Accept client connections
         self.is_listening = True
         while self.is_listening:
-            conn, _ = self.socket.accept()
-            t = threading.Thread(target=self.register_client, args=(conn,))
+            try:
+                conn, _ = self.socket.accept()
+            except:
+                break
+            t = threading.Thread(target=self.register_client, args=(conn,), daemon=True)
             t.start()
 
     def stop(self):
         """Stop the server by closing all active connections."""
         self.is_listening = False
+        if self.socket:
+            self.socket.close()
+            self.socket = None
+        
         i = 0
         for conn in self.clients.values():
             i += 1
             conn.close()
         self.clients.clear()
-        if self.socket:
-            self.socket.close()
         print(f'Clients: stopped, closed {i} connections')
 
     def register_client(self, conn):

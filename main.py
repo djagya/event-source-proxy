@@ -11,7 +11,7 @@ if sys.version_info < (3, 6):
 
 def queue_worker():
     while True:
-        message = q.get()
+        message = q.get(timeout=5)
         notify_ids = handler.process(message)
         clients_server.notify(notify_ids, message)
         q.task_done()
@@ -30,11 +30,9 @@ clients_server = ClientsServer()
 
 try:
     clients_server.start()
-
-    worker_thread = threading.Thread(target=queue_worker, daemon=True)
-    worker_thread.start()
-
     source_server.start()
+
+    queue_worker()
     sys.exit()
 except BaseException as err:
     print(f'Graceful shutdown, reason: {err!r}')

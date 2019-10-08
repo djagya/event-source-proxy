@@ -9,7 +9,7 @@ MAX_BUFFER_SIZE = 1000
 profiler = Profiler()
 
 
-class SourceServer():
+class SourceServer(threading.Thread):
     socket = None
     is_listening = False
     # Ring buffer of the size "buffers_size" which restricts the max amount of used memory.
@@ -19,18 +19,21 @@ class SourceServer():
     last_seq = 0
 
     def __init__(self, queue, buffer_size, host='', port=9090):
+        threading.Thread.__init__(self)
         self.host = host
         self.port = port
         self.buffer_size = buffer_size
         self.queue = queue
 
-    def start(self):
+    def run(self):
         """Start a server listening for the event source connection on the given host:port.
         Data chunks arrives and consist of out-of-order event messages. 
         Data is then split by \\n to extract a list of messages 
         which are then buffered to ensure the correct processing order.
         """
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        # Reuse old socket connection to avoid waiting for the timeout.
+        self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         try:
             self.socket.bind((self.host, self.port))
         except Exception as err:
